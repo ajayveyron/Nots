@@ -61,6 +61,27 @@ body {
   font-weight: 700;
 }
 
+.editor h1,
+.editor h2,
+.editor h3 {
+  margin: 0;
+  color: var(--text-strong);
+  font-weight: 500;
+  line-height: 1.25;
+}
+
+.editor h1 {
+  font-size: 1.45em;
+}
+
+.editor h2 {
+  font-size: 1.25em;
+}
+
+.editor h3 {
+  font-size: 1.1em;
+}
+
 .editor a {
   color: inherit;
   text-decoration: underline;
@@ -85,6 +106,11 @@ body {
   padding-left: 1.5em;
 }
 
+.editor li > ul,
+.editor li > ol {
+  margin: 0.05em 0 0.05em;
+}
+
 .editor li {
   margin: 0.04em 0;
 }
@@ -98,6 +124,10 @@ body {
 .editor pre {
   font-family: var(--font-mono);
   font-size: 0.78em;
+}
+
+.editor code {
+  color: var(--text-strong);
 }
 
 @media (max-width: 760px) {

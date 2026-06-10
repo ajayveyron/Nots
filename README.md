@@ -7,8 +7,23 @@ A minimal local-first writing page inspired by Jotttt. It has no auth, no backen
 - One clean writing surface
 - Autosave while typing
 - Black screen with only the note text visible
-- Bold, italic, underline, lists, indentation, strikethrough, and links through native editing or keyboard shortcuts
+- Markdown shortcuts that turn into rich text as you type
+- Bold, italic, underline, lists, indentation, strikethrough, links, headings, and code
+- VS Code-style line move and duplicate shortcuts
 - Static deployment on Vercel
+
+## Markdown
+
+- `# `, `## `, `### `: headings
+- `- ` or `* `: bulleted list
+- `1. `: numbered list
+- `> `: quote
+- `**text**` or `__text__`: bold
+- `*text*` or `_text_`: italic
+- `++text++`: underline
+- `~~text~~`: strikethrough
+- `` `text` ``: inline code
+- `[text](https://example.com)`: link
 
 ## Shortcuts
 
@@ -20,6 +35,8 @@ A minimal local-first writing page inspired by Jotttt. It has no auth, no backen
 - `Cmd/Ctrl+Shift+7`: numbered list
 - `Tab` / `Shift+Tab`: indent / outdent
 - `Cmd/Ctrl+K`: add link to selected text
+- `Alt/Opt+Up` / `Alt/Opt+Down`: move the current line
+- `Alt/Opt+Shift+Up` / `Alt/Opt+Shift+Down`: duplicate the current line
 
 ## Run
 
