@@ -43,7 +43,7 @@ body {
   line-height: 1.48;
   letter-spacing: 0;
   overflow-wrap: break-word;
-  white-space: normal;
+  white-space: pre-wrap;
   caret-color: var(--text-strong);
 }
 
@@ -129,6 +129,31 @@ body {
 
 .editor code {
   color: var(--text-strong);
+}
+
+.extra-cursor {
+  display: inline-block;
+  position: relative;
+  width: 0;
+  height: 1em;
+  vertical-align: -0.08em;
+  pointer-events: none;
+}
+
+.extra-cursor::after {
+  position: absolute;
+  top: 0.08em;
+  bottom: 0.08em;
+  left: 0;
+  border-left: 1px solid var(--text-strong);
+  content: "";
+  animation: caret-blink 1s steps(2, start) infinite;
+}
+
+@keyframes caret-blink {
+  50% {
+    opacity: 0;
+  }
 }
 
 @media (max-width: 760px) {

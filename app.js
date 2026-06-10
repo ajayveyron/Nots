@@ -6,9 +6,11 @@ const SAVE_DELAY = 250;
 const editor = document.querySelector("#editor");
 let saveTimer = 0;
 let isApplying = false;
+let extraCursorSerial = 0;
 
 const BLOCK_TAGS = new Set(["BLOCKQUOTE", "DIV", "H1", "H2", "H3", "LI", "P", "PRE"]);
 const TOP_LEVEL_TAGS = new Set(["BLOCKQUOTE", "DIV", "H1", "H2", "H3", "OL", "P", "PRE", "UL"]);
+const EXTRA_CURSOR_SELECTOR = "[data-extra-cursor]";
 
 function normalizeUrl(value) {
   const trimmed = value.trim();
@@ -105,6 +107,12 @@ function sanitizeHtml(input) {
   return template.innerHTML;
 }
 
+function htmlForStorage() {
+  const clone = editor.cloneNode(true);
+  clone.querySelectorAll(EXTRA_CURSOR_SELECTOR).forEach((cursor) => cursor.remove());
+  return sanitizeHtml(clone.innerHTML);
+}
+
 function normalizeEditorRoot() {
   const fragment = document.createDocumentFragment();
   let line = null;
@@ -187,7 +195,7 @@ function loadNote() {
 
 function saveNow() {
   try {
-    localStorage.setItem(STORAGE_KEY, sanitizeHtml(editor.innerHTML));
+    localStorage.setItem(STORAGE_KEY, htmlForStorage());
   } catch {
     // A minimal writing surface should not show persistent UI for quota errors.
   }
@@ -251,6 +259,98 @@ function setCaretAfter(node) {
   range.collapse(true);
   selection.removeAllRanges();
   selection.addRange(range);
+}
+
+function setSelectionRange(range) {
+  const selection = window.getSelection();
+  selection.removeAllRanges();
+  selection.addRange(range);
+}
+
+function extraCursorMarkers() {
+  return Array.from(editor.querySelectorAll(EXTRA_CURSOR_SELECTOR));
+}
+
+function hasExtraCursors() {
+  return extraCursorMarkers().length > 0;
+}
+
+function clearExtraCursors() {
+  extraCursorMarkers().forEach((cursor) => cursor.remove());
+}
+
+function createExtraCursor() {
+  const cursor = document.createElement("span");
+  cursor.className = "extra-cursor";
+  cursor.dataset.extraCursor = String(++extraCursorSerial);
+  cursor.contentEditable = "false";
+  return cursor;
+}
+
+function rangeFromPoint(x, y) {
+  if (document.caretRangeFromPoint) {
+    return document.caretRangeFromPoint(x, y);
+  }
+
+  if (document.caretPositionFromPoint) {
+    const position = document.caretPositionFromPoint(x, y);
+    if (!position) return null;
+
+    const range = document.createRange();
+    range.setStart(position.offsetNode, position.offset);
+    range.collapse(true);
+    return range;
+  }
+
+  return null;
+}
+
+function addExtraCursorAtPoint(x, y) {
+  const range = rangeFromPoint(x, y);
+  if (!range) return false;
+
+  const container =
+    range.startContainer.nodeType === Node.ELEMENT_NODE
+      ? range.startContainer
+      : range.startContainer.parentElement;
+  if (!container || !editor.contains(container)) return false;
+
+  if (!selectionRange()) {
+    setSelectionRange(range);
+    return true;
+  }
+
+  range.insertNode(createExtraCursor());
+  saveNow();
+  return true;
+}
+
+function insertTextAtExtraCursors(text) {
+  const renderedText = text === " " ? "\u00a0" : text;
+  extraCursorMarkers().forEach((cursor) => {
+    cursor.before(document.createTextNode(renderedText));
+  });
+}
+
+function insertLineBreakAtExtraCursors() {
+  extraCursorMarkers().forEach((cursor) => {
+    cursor.before(document.createElement("br"));
+  });
+}
+
+function deleteBeforeExtraCursors() {
+  extraCursorMarkers().forEach((cursor) => {
+    const previous = cursor.previousSibling;
+    if (!previous) return;
+
+    if (previous.nodeType === Node.TEXT_NODE) {
+      previous.textContent = previous.textContent.slice(0, -1);
+      if (!previous.textContent) previous.remove();
+      return;
+    }
+
+    previous.remove();
+  });
 }
 
 function textOffsetWithin(element) {
@@ -710,14 +810,89 @@ function handleListEnter(event, item) {
   return continueListItem(item);
 }
 
+function textFromKey(event) {
+  if (event.key.length === 1) return event.key;
+  if (event.code === "Space" || event.key === "Space" || event.key === "Spacebar") return " ";
+  return null;
+}
+
+function handleExtraCursorKeydown(event, line) {
+  if (!hasExtraCursors()) return false;
+
+  const modifier = event.metaKey || event.ctrlKey;
+  const text = textFromKey(event);
+
+  if (event.key === "Escape") {
+    event.preventDefault();
+    clearExtraCursors();
+    saveNow();
+    return true;
+  }
+
+  if (
+    event.key.startsWith("Arrow") ||
+    event.code.startsWith("Arrow") ||
+    ["Up", "Down", "Left", "Right"].includes(event.key)
+  ) {
+    clearExtraCursors();
+    saveNow();
+    return false;
+  }
+
+  if (modifier || event.altKey || event.isComposing) {
+    return false;
+  }
+
+  if (text !== null) {
+    event.preventDefault();
+    document.execCommand("insertText", false, text);
+    insertTextAtExtraCursors(text);
+    saveNow();
+    return true;
+  }
+
+  if (event.key === "Enter") {
+    event.preventDefault();
+    if (line?.tagName === "LI") {
+      handleListEnter(event, line);
+    } else {
+      document.execCommand("insertParagraph");
+    }
+    insertLineBreakAtExtraCursors();
+    saveNow();
+    return true;
+  }
+
+  if (event.key === "Backspace") {
+    event.preventDefault();
+    document.execCommand("delete");
+    deleteBeforeExtraCursors();
+    saveNow();
+    return true;
+  }
+
+  return false;
+}
+
+function isAltArrow(event, direction) {
+  const key = direction === -1 ? "Up" : "Down";
+  return (
+    event.altKey &&
+    !event.metaKey &&
+    !event.ctrlKey &&
+    (event.key === `Arrow${key}` || event.code === `Arrow${key}` || event.key === key)
+  );
+}
+
 function handleKeydown(event) {
   const modifier = event.metaKey || event.ctrlKey;
-  const movingUp = event.altKey && event.key === "ArrowUp";
-  const movingDown = event.altKey && event.key === "ArrowDown";
+  const movingUp = isAltArrow(event, -1);
+  const movingDown = isAltArrow(event, 1);
   const line = currentLineElement();
 
-  if ((movingUp || movingDown) && !modifier) {
+  if (movingUp || movingDown) {
     event.preventDefault();
+    event.stopPropagation();
     const direction = movingUp ? -1 : 1;
     if (event.shiftKey) {
       duplicateLine(direction);
@@ -727,7 +902,11 @@ function handleKeydown(event) {
     return;
   }
 
-  if (event.key === " " && handleMarkdownSpace(event)) {
+  if (handleExtraCursorKeydown(event, line)) {
+    return;
+  }
+
+  if (textFromKey(event) === " " && handleMarkdownSpace(event)) {
     return;
   }
 
@@ -779,14 +958,30 @@ function boot() {
   focusEditor();
 }
 
+function handleEditorMouseDown(event) {
+  if (event.altKey) {
+    event.preventDefault();
+    event.stopPropagation();
+    addExtraCursorAtPoint(event.clientX, event.clientY);
+    focusEditor();
+    return;
+  }
+
+  if (hasExtraCursors()) {
+    clearExtraCursors();
+    saveNow();
+  }
+}
+
 editor.addEventListener("input", () => {
   if (!isApplying) {
     applyMarkdown();
   }
   queueSave();
 });
+editor.addEventListener("mousedown", handleEditorMouseDown);
 editor.addEventListener("paste", handlePaste);
-editor.addEventListener("keydown", handleKeydown);
+editor.addEventListener("keydown", handleKeydown, true);
 editor.addEventListener("blur", saveNow);
 
 document.addEventListener("click", (event) => {

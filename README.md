@@ -37,6 +37,8 @@ Nots is a minimal local-first writing page inspired by Jotttt. It has no auth, n
 - `Cmd/Ctrl+K`: add link to selected text
 - `Alt/Opt+Up` / `Alt/Opt+Down`: move the current line
 - `Alt/Opt+Shift+Up` / `Alt/Opt+Shift+Down`: duplicate the current line
+- `Alt/Opt+Click`: add an extra cursor
+- `Esc`: clear extra cursors
 
 ## Run
 
