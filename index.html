@@ -1,0 +1,100 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta
+      name="description"
+      content="A lightweight local-first notes app with formatting and autosave."
+    >
+    <title>Jot Local Notes</title>
+    <link rel="stylesheet" href="styles.css">
+  </head>
+  <body>
+    <main class="app-shell">
+      <aside class="sidebar" aria-label="Notes">
+        <div class="brand-row">
+          <a class="brand" href="/" aria-label="Jot Local Notes home">Jot</a>
+          <button class="icon-button primary" id="new-note" type="button" title="New note" aria-label="New note">
+            +
+          </button>
+        </div>
+
+        <label class="search-wrap" for="note-search">
+          <span class="sr-only">Search notes</span>
+          <input id="note-search" type="search" autocomplete="off" placeholder="Search">
+        </label>
+
+        <div class="notes-list" id="notes-list" role="list"></div>
+      </aside>
+
+      <section class="workspace" aria-label="Editor">
+        <header class="topbar">
+          <input
+            class="title-input"
+            id="note-title"
+            type="text"
+            autocomplete="off"
+            placeholder="Untitled"
+            aria-label="Note title"
+          >
+
+          <div class="save-status" id="save-status" role="status" aria-live="polite">Stored locally</div>
+        </header>
+
+        <div class="toolbar" role="toolbar" aria-label="Formatting">
+          <button class="tool-button" type="button" data-command="bold" title="Bold" aria-label="Bold">
+            <strong>B</strong>
+          </button>
+          <button class="tool-button" type="button" data-command="italic" title="Italic" aria-label="Italic">
+            <em>I</em>
+          </button>
+          <button class="tool-button" type="button" data-command="underline" title="Underline" aria-label="Underline">
+            <span class="underline">U</span>
+          </button>
+          <button class="tool-button" type="button" data-command="strikeThrough" title="Strikethrough" aria-label="Strikethrough">
+            <span class="strike">S</span>
+          </button>
+          <span class="divider" aria-hidden="true"></span>
+          <button class="tool-button" type="button" data-command="insertUnorderedList" title="Bulleted list" aria-label="Bulleted list">
+            UL
+          </button>
+          <button class="tool-button" type="button" data-command="insertOrderedList" title="Numbered list" aria-label="Numbered list">
+            OL
+          </button>
+          <button class="tool-button" type="button" data-command="outdent" title="Outdent" aria-label="Outdent">
+            &lt;
+          </button>
+          <button class="tool-button" type="button" data-command="indent" title="Indent" aria-label="Indent">
+            &gt;
+          </button>
+          <span class="divider" aria-hidden="true"></span>
+          <button class="tool-button" id="link-button" type="button" title="Link" aria-label="Link">
+            Link
+          </button>
+          <button class="tool-button danger" id="delete-note" type="button" title="Delete note" aria-label="Delete note">
+            Del
+          </button>
+        </div>
+
+        <form class="link-panel" id="link-panel" hidden>
+          <label class="sr-only" for="link-url">Link URL</label>
+          <input id="link-url" type="url" inputmode="url" placeholder="https://example.com">
+          <button class="panel-button" type="submit">Apply</button>
+          <button class="panel-button muted" id="unlink-button" type="button">Remove</button>
+        </form>
+
+        <article
+          class="editor"
+          id="editor"
+          contenteditable="true"
+          spellcheck="true"
+          aria-label="Note body"
+          data-placeholder="Start typing..."
+        ></article>
+      </section>
+    </main>
+
+    <script src="app.js"></script>
+  </body>
+</html>
