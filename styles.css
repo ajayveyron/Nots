@@ -30,7 +30,7 @@ body {
 }
 
 .editor {
-  width: min(930px, 100%);
+  width: min(760px, 100%);
   min-height: calc(100vh - 226px);
   border: 0;
   outline: 0;

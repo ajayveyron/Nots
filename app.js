@@ -263,6 +263,16 @@ function textOffsetWithin(element) {
   return clone.toString().length;
 }
 
+function textBeforeCaretWithin(element) {
+  const range = selectionRange();
+  if (!range) return "";
+
+  const clone = range.cloneRange();
+  clone.selectNodeContents(element);
+  clone.setEnd(range.startContainer, range.startOffset);
+  return clone.toString();
+}
+
 function setCaretByTextOffset(element, offset) {
   const walker = document.createTreeWalker(element, NodeFilter.SHOW_TEXT);
   let currentOffset = 0;
@@ -292,6 +302,10 @@ function createEmptyBlock(tagName) {
   return block;
 }
 
+function isEmptyNode(node) {
+  return !node.textContent.trim();
+}
+
 function replaceLineWithElement(line, element, caretElement = element) {
   line.replaceWith(element);
   setCaretAtStart(caretElement);
@@ -305,13 +319,49 @@ function convertLineToList(line, tagName) {
   replaceLineWithElement(line, list, item);
 }
 
+function createListFromMarkdownMarker(line, tagName) {
+  convertLineToList(line, tagName);
+  return true;
+}
+
+function handleMarkdownSpace(event) {
+  const line = currentLineElement();
+  if (!line || line.tagName === "LI") return false;
+
+  const beforeCaret = textBeforeCaretWithin(line);
+
+  if (beforeCaret === "-" || beforeCaret === "*") {
+    event.preventDefault();
+    return createListFromMarkdownMarker(line, "ul");
+  }
+
+  if (/^\d+\.$/.test(beforeCaret)) {
+    event.preventDefault();
+    return createListFromMarkdownMarker(line, "ol");
+  }
+
+  if (/^#{1,3}$/.test(beforeCaret)) {
+    event.preventDefault();
+    replaceLineWithElement(line, createEmptyBlock(`h${beforeCaret.length}`));
+    return true;
+  }
+
+  if (beforeCaret === ">") {
+    event.preventDefault();
+    replaceLineWithElement(line, createEmptyBlock("blockquote"));
+    return true;
+  }
+
+  return false;
+}
+
 function applyBlockMarkdown() {
   const line = currentLineElement();
   if (!line || line.tagName === "LI") return false;
 
-  const text = line.textContent;
+  const text = line.textContent.replace(/\u00a0/g, " ");
 
-  if (text === "- " || text === "* ") {
+  if (/^[-*]\s$/.test(text)) {
     convertLineToList(line, "ul");
     return true;
   }
@@ -576,10 +626,95 @@ function duplicateLine(direction) {
   return true;
 }
 
+function listForItem(item) {
+  const list = item.parentElement;
+  return list && ["OL", "UL"].includes(list.tagName) ? list : null;
+}
+
+function nestedListForItem(item, tagName) {
+  return Array.from(item.children).find((child) => child.tagName === tagName) || null;
+}
+
+function indentListItem(item) {
+  const list = listForItem(item);
+  const previous = item.previousElementSibling;
+  if (!list || !previous || previous.tagName !== "LI") return false;
+
+  const offset = textOffsetWithin(item);
+  let nestedList = nestedListForItem(previous, list.tagName);
+  if (!nestedList) {
+    nestedList = document.createElement(list.tagName.toLowerCase());
+    previous.append(nestedList);
+  }
+
+  nestedList.append(item);
+  setCaretByTextOffset(item, offset);
+  saveNow();
+  return true;
+}
+
+function outdentListItem(item) {
+  const list = listForItem(item);
+  if (!list) return false;
+
+  const parentItem = list.parentElement?.closest("li");
+  if (!parentItem) return false;
+
+  const offset = textOffsetWithin(item);
+  parentItem.parentElement.insertBefore(item, parentItem.nextSibling);
+
+  if (!list.children.length) {
+    list.remove();
+  }
+
+  setCaretByTextOffset(item, offset);
+  saveNow();
+  return true;
+}
+
+function exitListItem(item) {
+  const list = listForItem(item);
+  if (!list) return false;
+
+  const paragraph = createEmptyBlock("div");
+  item.remove();
+
+  if (list.children.length) {
+    list.after(paragraph);
+  } else {
+    list.replaceWith(paragraph);
+  }
+
+  setCaretAtStart(paragraph);
+  saveNow();
+  return true;
+}
+
+function continueListItem(item) {
+  const next = createEmptyBlock("li");
+  item.parentElement.insertBefore(next, item.nextSibling);
+  setCaretAtStart(next);
+  saveNow();
+  return true;
+}
+
+function handleListEnter(event, item) {
+  if (!item) return false;
+
+  event.preventDefault();
+
+  if (isEmptyNode(item)) {
+    return outdentListItem(item) || exitListItem(item);
+  }
+
+  return continueListItem(item);
+}
+
 function handleKeydown(event) {
   const modifier = event.metaKey || event.ctrlKey;
   const movingUp = event.altKey && event.key === "ArrowUp";
   const movingDown = event.altKey && event.key === "ArrowDown";
+  const line = currentLineElement();
 
   if ((movingUp || movingDown) && !modifier) {
     event.preventDefault();
@@ -592,17 +727,27 @@ function handleKeydown(event) {
     return;
   }
 
+  if (event.key === " " && handleMarkdownSpace(event)) {
+    return;
+  }
+
   if (event.key === "Tab") {
     event.preventDefault();
+    if (line?.tagName === "LI") {
+      if (event.shiftKey) {
+        outdentListItem(line);
+      } else {
+        indentListItem(line);
+      }
+      return;
+    }
     runCommand(event.shiftKey ? "outdent" : "indent");
     return;
   }
 
-  if (event.key === "Enter" && currentLineElement()?.tagName === "LI") {
-    window.setTimeout(() => {
-      normalizeEditorRoot();
-      saveNow();
-    });
+  if (event.key === "Enter" && line?.tagName === "LI") {
+    handleListEnter(event, line);
+    return;
   }
 
   if (modifier && event.key.toLowerCase() === "k") {
