@@ -4,6 +4,8 @@
   --text: #bdbdbd;
   --text-strong: #d7d7d7;
   --selection: rgba(255, 255, 255, 0.18);
+  --font-sans: "Geist", system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  --font-mono: "Geist Mono", "SFMono-Regular", Consolas, "Liberation Mono", monospace;
 }
 
 * {
@@ -19,6 +21,7 @@ body {
   margin: 0;
   background: var(--bg);
   color: var(--text);
+  font-family: var(--font-sans);
 }
 
 .page {
@@ -33,10 +36,10 @@ body {
   outline: 0;
   color: var(--text);
   background: transparent;
-  font-family: Georgia, "Times New Roman", Times, serif;
-  font-size: 25px;
+  font-family: var(--font-sans);
+  font-size: 24px;
   font-weight: 400;
-  line-height: 1.52;
+  line-height: 1.6;
   letter-spacing: 0;
   overflow-wrap: break-word;
   white-space: normal;
@@ -93,7 +96,7 @@ body {
 
 .editor code,
 .editor pre {
-  font-family: "SFMono-Regular", Consolas, "Liberation Mono", monospace;
+  font-family: var(--font-mono);
   font-size: 0.78em;
 }
 
