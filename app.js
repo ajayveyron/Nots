@@ -1,289 +1,9 @@
-const STORAGE_KEY = "jot-local-notes:v1";
-const SELECTED_KEY = "jot-local-notes:selected";
-const SAVE_DELAY = 320;
+const STORAGE_KEY = "jot:minimal-note:v1";
+const LEGACY_KEY = "jot-local-notes:v1";
+const SAVE_DELAY = 250;
 
-const notesList = document.querySelector("#notes-list");
-const noteSearch = document.querySelector("#note-search");
-const newNoteButton = document.querySelector("#new-note");
-const deleteNoteButton = document.querySelector("#delete-note");
-const noteTitle = document.querySelector("#note-title");
 const editor = document.querySelector("#editor");
-const saveStatus = document.querySelector("#save-status");
-const linkButton = document.querySelector("#link-button");
-const linkPanel = document.querySelector("#link-panel");
-const linkUrl = document.querySelector("#link-url");
-const unlinkButton = document.querySelector("#unlink-button");
-const toolButtons = Array.from(document.querySelectorAll("[data-command]"));
-
-const state = {
-  notes: [],
-  selectedId: null,
-  saveTimer: 0,
-  isHydrating: false,
-  lastSelection: null,
-};
-
-function createId() {
-  if (typeof crypto !== "undefined" && typeof crypto.randomUUID === "function") {
-    return crypto.randomUUID();
-  }
-
-  return `note-${Date.now()}-${Math.random().toString(16).slice(2)}`;
-}
-
-function createNote(title = "") {
-  const now = new Date().toISOString();
-
-  return {
-    id: createId(),
-    title,
-    content: "",
-    createdAt: now,
-    updatedAt: now,
-  };
-}
-
-function seedNotes() {
-  const firstNote = createNote("");
-  state.notes = [firstNote];
-  state.selectedId = firstNote.id;
-  persistNow("Stored locally");
-}
-
-function readStoredNotes() {
-  try {
-    const parsed = JSON.parse(localStorage.getItem(STORAGE_KEY) || "[]");
-    if (!Array.isArray(parsed)) return [];
-
-    return parsed
-      .filter((note) => note && typeof note.id === "string")
-      .map((note) => ({
-        id: note.id,
-        title: typeof note.title === "string" ? note.title : "",
-        content: sanitizeHtml(typeof note.content === "string" ? note.content : ""),
-        createdAt: note.createdAt || new Date().toISOString(),
-        updatedAt: note.updatedAt || note.createdAt || new Date().toISOString(),
-      }));
-  } catch {
-    return [];
-  }
-}
-
-function persistNow(status = "Saved") {
-  try {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(state.notes));
-    if (state.selectedId) {
-      localStorage.setItem(SELECTED_KEY, state.selectedId);
-    }
-    saveStatus.textContent = status;
-  } catch {
-    saveStatus.textContent = "Storage full";
-  }
-}
-
-function queuePersist() {
-  saveStatus.textContent = "Saving...";
-  window.clearTimeout(state.saveTimer);
-  state.saveTimer = window.setTimeout(() => persistNow("Saved"), SAVE_DELAY);
-}
-
-function currentNote() {
-  return state.notes.find((note) => note.id === state.selectedId) || state.notes[0] || null;
-}
-
-function updateCurrentNote(patch) {
-  const note = currentNote();
-  if (!note) return;
-
-  Object.assign(note, patch, { updatedAt: new Date().toISOString() });
-  queuePersist();
-  renderNotes();
-}
-
-function noteLabel(note) {
-  const title = note.title.trim();
-  if (title) return title;
-
-  const text = htmlToText(note.content).trim();
-  return text || "Untitled";
-}
-
-function htmlToText(html) {
-  const template = document.createElement("template");
-  template.innerHTML = sanitizeHtml(html);
-  return (template.content.textContent || "").replace(/\s+/g, " ");
-}
-
-function formatDate(value) {
-  const date = new Date(value);
-  if (Number.isNaN(date.getTime())) return "";
-
-  return new Intl.DateTimeFormat(undefined, {
-    month: "short",
-    day: "numeric",
-    hour: "numeric",
-    minute: "2-digit",
-  }).format(date);
-}
-
-function renderNotes() {
-  const search = noteSearch.value.trim().toLowerCase();
-  const sorted = [...state.notes].sort((a, b) => b.updatedAt.localeCompare(a.updatedAt));
-  const matches = sorted.filter((note) => {
-    if (!search) return true;
-    return `${noteLabel(note)} ${htmlToText(note.content)}`.toLowerCase().includes(search);
-  });
-
-  notesList.innerHTML = "";
-
-  for (const note of matches) {
-    const item = document.createElement("button");
-    item.type = "button";
-    item.className = `note-item${note.id === state.selectedId ? " active" : ""}`;
-    item.dataset.noteId = note.id;
-    item.setAttribute("role", "listitem");
-
-    const title = document.createElement("div");
-    title.className = "note-title";
-    title.textContent = noteLabel(note);
-
-    const preview = document.createElement("div");
-    preview.className = "note-preview";
-    preview.textContent = htmlToText(note.content) || "No text yet";
-
-    const date = document.createElement("div");
-    date.className = "note-date";
-    date.textContent = formatDate(note.updatedAt);
-
-    item.append(title, preview, date);
-    notesList.append(item);
-  }
-}
-
-function hydrateEditor() {
-  const note = currentNote();
-  if (!note) return;
-
-  state.isHydrating = true;
-  noteTitle.value = note.title;
-  editor.innerHTML = sanitizeHtml(note.content);
-  document.title = noteLabel(note);
-  state.isHydrating = false;
-  updateToolbarState();
-}
-
-function selectNote(id) {
-  if (!state.notes.some((note) => note.id === id)) return;
-
-  flushPendingSave();
-  state.selectedId = id;
-  localStorage.setItem(SELECTED_KEY, id);
-  closeLinkPanel();
-  hydrateEditor();
-  renderNotes();
-}
-
-function addNote() {
-  flushPendingSave();
-  const note = createNote("");
-  state.notes.unshift(note);
-  state.selectedId = note.id;
-  persistNow("Saved");
-  closeLinkPanel();
-  hydrateEditor();
-  renderNotes();
-  noteTitle.focus();
-}
-
-function deleteCurrentNote() {
-  const note = currentNote();
-  if (!note) return;
-
-  const label = noteLabel(note);
-  const ok = window.confirm(`Delete "${label}"?`);
-  if (!ok) return;
-
-  state.notes = state.notes.filter((item) => item.id !== note.id);
-  if (!state.notes.length) {
-    state.notes = [createNote("")];
-  }
-
-  state.selectedId = state.notes[0].id;
-  persistNow("Saved");
-  closeLinkPanel();
-  hydrateEditor();
-  renderNotes();
-}
-
-function flushPendingSave() {
-  if (!state.saveTimer) return;
-
-  window.clearTimeout(state.saveTimer);
-  state.saveTimer = 0;
-  persistNow("Saved");
-}
-
-function saveSelection() {
-  const selection = window.getSelection();
-  if (!selection || !selection.rangeCount) return;
-
-  const range = selection.getRangeAt(0);
-  if (editor.contains(range.commonAncestorContainer)) {
-    state.lastSelection = range.cloneRange();
-  }
-}
-
-function restoreSelection() {
-  if (!state.lastSelection) return;
-
-  const selection = window.getSelection();
-  selection.removeAllRanges();
-  selection.addRange(state.lastSelection);
-}
-
-function focusEditor() {
-  editor.focus({ preventScroll: true });
-}
-
-function execute(command, value = null) {
-  restoreSelection();
-  focusEditor();
-  document.execCommand(command, false, value);
-  saveSelection();
-  updateCurrentNote({ content: editor.innerHTML });
-  updateToolbarState();
-}
-
-function updateToolbarState() {
-  for (const button of toolButtons) {
-    const command = button.dataset.command;
-    button.classList.toggle("active", document.queryCommandState(command));
-  }
-}
-
-function openLinkPanel() {
-  saveSelection();
-  linkPanel.hidden = false;
-  linkUrl.value = selectedLinkHref();
-  linkUrl.focus();
-}
-
-function closeLinkPanel() {
-  linkPanel.hidden = true;
-  linkUrl.value = "";
-}
-
-function selectedLinkHref() {
-  const selection = window.getSelection();
-  if (!selection || !selection.anchorNode) return "";
-
-  const node =
-    selection.anchorNode.nodeType === Node.ELEMENT_NODE
-      ? selection.anchorNode
-      : selection.anchorNode.parentElement;
-  const link = node ? node.closest("a") : null;
-  return link ? link.href : "";
-}
+let saveTimer = 0;
 
 function normalizeUrl(value) {
   const trimmed = value.trim();
@@ -303,36 +23,14 @@ function normalizeUrl(value) {
   return "";
 }
 
-function applyLink(event) {
-  event.preventDefault();
-  const href = normalizeUrl(linkUrl.value);
-  if (!href) {
-    linkUrl.focus();
-    return;
+function unwrapNode(node) {
+  const parent = node.parentNode;
+  if (!parent) return;
+
+  while (node.firstChild) {
+    parent.insertBefore(node.firstChild, node);
   }
-
-  execute("createLink", href);
-  sanitizeEditorLinks();
-  closeLinkPanel();
-}
-
-function removeLink() {
-  execute("unlink");
-  closeLinkPanel();
-}
-
-function sanitizeEditorLinks() {
-  editor.querySelectorAll("a").forEach((link) => {
-    const href = normalizeUrl(link.getAttribute("href") || "");
-    if (!href) {
-      link.removeAttribute("href");
-      return;
-    }
-    link.href = href;
-    link.target = "_blank";
-    link.rel = "noopener noreferrer";
-  });
-  updateCurrentNote({ content: editor.innerHTML });
+  parent.removeChild(node);
 }
 
 function sanitizeHtml(input) {
@@ -402,18 +100,89 @@ function sanitizeHtml(input) {
   return template.innerHTML;
 }
 
-function unwrapNode(node) {
-  const parent = node.parentNode;
-  if (!parent) return;
+function legacyNoteHtml() {
+  try {
+    const notes = JSON.parse(localStorage.getItem(LEGACY_KEY) || "[]");
+    if (!Array.isArray(notes) || !notes.length) return "";
 
-  while (node.firstChild) {
-    parent.insertBefore(node.firstChild, node);
+    return notes
+      .map((note) => {
+        const title = typeof note.title === "string" ? note.title.trim() : "";
+        const content = typeof note.content === "string" ? note.content : "";
+        return `${title ? `<p>${escapeHtml(title)}</p>` : ""}${content}`;
+      })
+      .filter(Boolean)
+      .join("<p><br></p>");
+  } catch {
+    return "";
   }
-  parent.removeChild(node);
+}
+
+function escapeHtml(value) {
+  return value
+    .replaceAll("&", "&amp;")
+    .replaceAll("<", "&lt;")
+    .replaceAll(">", "&gt;")
+    .replaceAll('"', "&quot;")
+    .replaceAll("'", "&#039;");
+}
+
+function loadNote() {
+  const stored = localStorage.getItem(STORAGE_KEY);
+  const initial = stored !== null ? stored : legacyNoteHtml();
+  editor.innerHTML = sanitizeHtml(initial);
+}
+
+function saveNow() {
+  try {
+    localStorage.setItem(STORAGE_KEY, sanitizeHtml(editor.innerHTML));
+  } catch {
+    // A minimal writing surface should not show persistent UI for quota errors.
+  }
+}
+
+function queueSave() {
+  window.clearTimeout(saveTimer);
+  saveTimer = window.setTimeout(saveNow, SAVE_DELAY);
+}
+
+function focusEditor() {
+  editor.focus({ preventScroll: true });
+}
+
+function runCommand(command, value = null) {
+  document.execCommand(command, false, value);
+  saveNow();
+}
+
+function promptForLink() {
+  const selection = window.getSelection();
+  if (!selection || selection.isCollapsed) return;
+
+  const href = normalizeUrl(window.prompt("Paste a link") || "");
+  if (!href) return;
+
+  runCommand("createLink", href);
+  sanitizeLinks();
+}
+
+function sanitizeLinks() {
+  editor.querySelectorAll("a").forEach((link) => {
+    const href = normalizeUrl(link.getAttribute("href") || "");
+    if (!href) {
+      unwrapNode(link);
+      return;
+    }
+    link.href = href;
+    link.target = "_blank";
+    link.rel = "noopener noreferrer";
+  });
+  saveNow();
 }
 
 function handlePaste(event) {
   event.preventDefault();
+
   const clipboard = event.clipboardData;
   const html = clipboard.getData("text/html");
   const text = clipboard.getData("text/plain");
@@ -424,81 +193,58 @@ function handlePaste(event) {
     document.execCommand("insertText", false, text);
   }
 
-  updateCurrentNote({ content: editor.innerHTML });
+  saveNow();
+}
+
+function handleKeydown(event) {
+  const modifier = event.metaKey || event.ctrlKey;
+
+  if (event.key === "Tab") {
+    event.preventDefault();
+    runCommand(event.shiftKey ? "outdent" : "indent");
+    return;
+  }
+
+  if (modifier && event.key.toLowerCase() === "k") {
+    event.preventDefault();
+    promptForLink();
+    return;
+  }
+
+  if (modifier && event.shiftKey && event.key.toLowerCase() === "x") {
+    event.preventDefault();
+    runCommand("strikeThrough");
+    return;
+  }
+
+  if (modifier && event.shiftKey && event.key === "8") {
+    event.preventDefault();
+    runCommand("insertUnorderedList");
+    return;
+  }
+
+  if (modifier && event.shiftKey && event.key === "7") {
+    event.preventDefault();
+    runCommand("insertOrderedList");
+  }
 }
 
 function boot() {
-  state.notes = readStoredNotes();
-  if (!state.notes.length) {
-    seedNotes();
-  }
-
-  const storedSelected = localStorage.getItem(SELECTED_KEY);
-  state.selectedId = state.notes.some((note) => note.id === storedSelected)
-    ? storedSelected
-    : state.notes[0].id;
-
-  hydrateEditor();
-  renderNotes();
+  loadNote();
+  focusEditor();
 }
 
-notesList.addEventListener("click", (event) => {
-  const item = event.target.closest(".note-item");
-  if (!item) return;
-  selectNote(item.dataset.noteId);
-});
-
-noteSearch.addEventListener("input", renderNotes);
-newNoteButton.addEventListener("click", addNote);
-deleteNoteButton.addEventListener("click", deleteCurrentNote);
-
-noteTitle.addEventListener("input", () => {
-  if (state.isHydrating) return;
-  updateCurrentNote({ title: noteTitle.value });
-  document.title = noteTitle.value.trim() || "Jot Local Notes";
-});
-
-editor.addEventListener("input", () => {
-  if (state.isHydrating) return;
-  saveSelection();
-  updateCurrentNote({ content: editor.innerHTML });
-});
-
-editor.addEventListener("keyup", () => {
-  saveSelection();
-  updateToolbarState();
-});
-
-editor.addEventListener("mouseup", () => {
-  saveSelection();
-  updateToolbarState();
-});
-
+editor.addEventListener("input", queueSave);
 editor.addEventListener("paste", handlePaste);
+editor.addEventListener("keydown", handleKeydown);
+editor.addEventListener("blur", saveNow);
 
-toolButtons.forEach((button) => {
-  button.addEventListener("mousedown", (event) => event.preventDefault());
-  button.addEventListener("click", () => execute(button.dataset.command));
-});
-
-linkButton.addEventListener("mousedown", (event) => event.preventDefault());
-linkButton.addEventListener("click", openLinkPanel);
-linkPanel.addEventListener("submit", applyLink);
-unlinkButton.addEventListener("click", removeLink);
-
-document.addEventListener("selectionchange", () => {
-  const selection = window.getSelection();
-  if (!selection || !selection.anchorNode) return;
-  if (editor.contains(selection.anchorNode)) {
-    saveSelection();
-    updateToolbarState();
+document.addEventListener("click", (event) => {
+  if (event.target === document.body || event.target.classList.contains("page")) {
+    focusEditor();
   }
 });
 
-document.addEventListener("keydown", (event) => {
-  if (event.key === "Escape") closeLinkPanel();
-});
-
-window.addEventListener("beforeunload", flushPendingSave);
+window.addEventListener("beforeunload", saveNow);
 
 boot();

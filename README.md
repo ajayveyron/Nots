@@ -1,18 +1,25 @@
-# Jot Local Notes
+# Jot
 
-A lightweight local-first notes app inspired by Jotttt. It has no auth, no backend, and no build step. Notes are saved in the browser with `localStorage`.
+A minimal local-first writing page inspired by Jotttt. It has no auth, no backend, no visible controls, and no build step. The note is saved in the browser with `localStorage`.
 
 ## Features
 
-- Multiple notes, saved locally in the browser
+- One clean writing surface
 - Autosave while typing
-- Clean contenteditable editor
-- Bold, italic, underline, strikethrough
-- Bulleted and numbered lists
-- Indent and outdent controls
-- Hyperlink creation and removal
-- Search across local notes
+- Black screen with only the note text visible
+- Bold, italic, underline, lists, indentation, strikethrough, and links through native editing or keyboard shortcuts
 - Static deployment on Vercel
+
+## Shortcuts
+
+- `Cmd/Ctrl+B`: bold
+- `Cmd/Ctrl+I`: italic
+- `Cmd/Ctrl+U`: underline
+- `Cmd/Ctrl+Shift+X`: strikethrough
+- `Cmd/Ctrl+Shift+8`: bulleted list
+- `Cmd/Ctrl+Shift+7`: numbered list
+- `Tab` / `Shift+Tab`: indent / outdent
+- `Cmd/Ctrl+K`: add link to selected text
 
 ## Run
 
