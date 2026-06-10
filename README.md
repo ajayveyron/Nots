@@ -1,6 +1,6 @@
-# Jot
+# Nots
 
-A minimal local-first writing page inspired by Jotttt. It has no auth, no backend, no visible controls, and no build step. The note is saved in the browser with `localStorage`.
+Nots is a minimal local-first writing page inspired by Jotttt. It has no auth, no backend, no visible controls, and no build step. The note is saved in the browser with `localStorage`.
 
 ## Features
 

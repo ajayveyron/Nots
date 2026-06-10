@@ -1,4 +1,5 @@
-const STORAGE_KEY = "jot:minimal-note:v1";
+const STORAGE_KEY = "nots:minimal-note:v1";
+const PREVIOUS_STORAGE_KEY = "jot:minimal-note:v1";
 const LEGACY_KEY = "jot-local-notes:v1";
 const SAVE_DELAY = 250;
 
@@ -178,7 +179,8 @@ function escapeHtml(value) {
 
 function loadNote() {
   const stored = localStorage.getItem(STORAGE_KEY);
-  const initial = stored !== null ? stored : legacyNoteHtml();
+  const previous = localStorage.getItem(PREVIOUS_STORAGE_KEY);
+  const initial = stored !== null ? stored : previous !== null ? previous : legacyNoteHtml();
   editor.innerHTML = sanitizeHtml(initial);
   normalizeEditorRoot();
 }
